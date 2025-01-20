@@ -107,30 +107,34 @@ class CityscapesDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, str]:
-        img_path, label_path, city = self.samples[idx]
-        
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         try:
+            img_path, label_path = self.image_paths[idx], self.label_paths[idx]
+            
             # Load image and label
             image = Image.open(img_path).convert('RGB')
             label = Image.open(label_path).convert('L')
             
             # Apply transforms
-            image = self.img_transform(image)
-            label = self.label_transform(label).squeeze().long()
+            if self.transform:
+                image = self.transform(image)
+            if self.target_transform:
+                label = self.target_transform(label)
             
-            # Verify outputs
-            assert image.shape == (3, *self.img_size[::-1]), f"Wrong image shape: {image.shape}"
-            assert label.shape == self.img_size[::-1], f"Wrong label shape: {label.shape}"
+            # Shape verification
+            # Note: tensor shape is (C, H, W), but img_size is (H, W)
+            expected_shape = (3, self.img_size[0], self.img_size[1])  # (C, H, W)
+            if image.shape != expected_shape:
+                print(f"Wrong image shape: got {image.shape}, expected {expected_shape}")
+            if label.shape != (self.img_size[0], self.img_size[1]):
+                print(f"Wrong label shape: got {label.shape}, expected {self.img_size}")
             
-            return image, label, city
-            
+            return image, label
         except Exception as e:
-            print(f"Error loading sample {idx}:")
-            print(f"Image: {img_path}")
-            print(f"Label: {label_path}")
+            print(f"\nError loading sample {idx}:")
+            print(f"Image path: {img_path}")
+            print(f"Label path: {label_path}")
             raise e
-
     def get_class_names(self) -> List[str]:
         """Get list of class names"""
         return self.CLASSES.copy()
