@@ -2,7 +2,7 @@ import torch
 import time
 from pathlib import Path
 from tqdm import tqdm
-from utils import MetricTracker, PerformanceMonitor, Visualizer, LRSchedulerWithWarmup
+from MLDL2024_project.utils import MetricTracker, PerformanceMonitor, Visualizer, LRSchedulerWithWarmup
 
 class Trainer:
     def __init__(self, model, criterion, optimizer, device, num_classes, 
