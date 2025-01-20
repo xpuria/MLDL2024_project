@@ -199,7 +199,7 @@ class Trainer:
         return self.best_metrics
 
 def train_model(model, criterion, optimizer, train_loader, val_loader, 
-               class_names, device, num_epochs, model_name='model'):
+               class_names, device, num_epochs, scheduler_mode=True,model_name='model'):
     """Convenience function for training"""
     trainer = Trainer(
         model=model,
@@ -219,7 +219,8 @@ def train_model(model, criterion, optimizer, train_loader, val_loader,
         warmup_method='linear',
         decay_method='poly'
     )
-    
+    if scheduler_mode == False:
+        scheduler = None
     # Train the model
     best_metrics = trainer.train(
         train_loader=train_loader,
