@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from pathlib import Path
+import numpy as np
 from MLDL2024_project.utils import fast_hist, per_class_iou, poly_lr_scheduler, plot_training_curves
 
 def train_model(model: nn.Module,
@@ -13,24 +14,10 @@ def train_model(model: nn.Module,
                num_epochs: int,
                save_dir: str = 'checkpoints',
                scheduler_mode: bool = True) -> tuple:
-    """Training function with validation
-    Args:
-        model: Model to train
-        criterion: Loss function
-        optimizer: Optimizer
-        train_loader: Training data loader
-        val_loader: Validation data loader
-        device: Device to train on
-        num_epochs: Number of epochs
-        save_dir: Directory to save checkpoints
-        scheduler_mode: Whether to use learning rate scheduler
-    Returns:
-        Tuple containing training history and best epoch
-    """
+    """Training function with validation"""
     save_dir = Path(save_dir)
     save_dir.mkdir(exist_ok=True)
 
-    # Training history
     history = {
         'train_loss': [],
         'train_miou': [],
@@ -39,41 +26,47 @@ def train_model(model: nn.Module,
         'lr': []
     }
     
-    # Best metric tracking
     best_miou = 0
     best_epoch = 0
     
-    # Main training loop
+    def print_iou_per_class(hist, phase='train'):
+        """Print IoU for each class"""
+        class_names = train_loader.dataset.get_class_names()
+        iou_per_class = per_class_iou(hist) * 100
+        print(f"\n{phase.capitalize()} IoU per class:")
+        for class_idx, iou in enumerate(iou_per_class):
+            print(f"{class_names[class_idx]:20s}: {iou:.2f}%")
+    
     for epoch in range(num_epochs):
         # Training phase
         model.train()
         train_loss = 0
-        hist = np.zeros((19, 19))  # 19 classes
+        train_hist = np.zeros((19, 19))
         
         train_loop = tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs} (Train)')
         for i, (images, labels) in enumerate(train_loop):
             images = images.to(device)
             labels = labels.to(device)
             
-            # Forward pass
             optimizer.zero_grad()
             outputs = model(images)
             
-            # Handle auxiliary outputs (BiSeNet)
+            # Handle different model outputs
             if isinstance(outputs, tuple):
-                loss = criterion(outputs[0], labels)
-                if model.training:
-                    aux_loss2 = criterion(outputs[1], labels)
-                    aux_loss3 = criterion(outputs[2], labels)
-                    loss = loss + 0.4 * aux_loss2 + 0.4 * aux_loss3
-                outputs = outputs[0]
+                main_output = outputs[0]
+                loss = criterion(main_output, labels)
+                # Add auxiliary losses if available
+                if len(outputs) > 1 and model.training:
+                    aux_outputs = outputs[1:]
+                    for aux_output in aux_outputs:
+                        if aux_output is not None:
+                            loss += 0.4 * criterion(aux_output, labels)
             else:
-                loss = criterion(outputs, labels)
+                main_output = outputs
+                loss = criterion(main_output, labels)
             
-            # Backward pass
             loss.backward()
             
-            # Update learning rate
             if scheduler_mode:
                 current_iter = epoch * len(train_loader) + i
                 lr = poly_lr_scheduler(
@@ -86,30 +79,28 @@ def train_model(model: nn.Module,
             
             optimizer.step()
             
-            # Update metrics
             train_loss += loss.item()
-            predictions = outputs.argmax(1)
-            hist += fast_hist(
+            predictions = main_output.argmax(1)
+            train_hist += fast_hist(
                 labels.cpu().numpy(),
                 predictions.cpu().numpy(),
                 19
             )
             
-            # Update progress bar
-            miou = np.mean(per_class_iou(hist)) * 100
+            # Update progress bar with current metrics
+            miou = np.mean(per_class_iou(train_hist)) * 100
             train_loop.set_postfix({
                 'Loss': f'{loss.item():.4f}',
                 'mIoU': f'{miou:.2f}%'
             })
         
-        # Compute epoch metrics
-        train_miou = np.mean(per_class_iou(hist)) * 100
+        train_miou = np.mean(per_class_iou(train_hist)) * 100
         train_loss = train_loss / len(train_loader)
         
         # Validation phase
         model.eval()
         val_loss = 0
-        hist = np.zeros((19, 19))
+        val_hist = np.zeros((19, 19))
         
         with torch.no_grad():
             val_loop = tqdm(val_loader, desc=f'Epoch {epoch+1}/{num_epochs} (Val)')
@@ -125,7 +116,7 @@ def train_model(model: nn.Module,
                 val_loss += loss.item()
                 
                 predictions = outputs.argmax(1)
-                hist += fast_hist(
+                val_hist += fast_hist(
                     labels.cpu().numpy(),
                     predictions.cpu().numpy(),
                     19
@@ -133,8 +124,7 @@ def train_model(model: nn.Module,
                 
                 val_loop.set_postfix({'Loss': f'{loss.item():.4f}'})
         
-        # Compute validation metrics
-        val_miou = np.mean(per_class_iou(hist)) * 100
+        val_miou = np.mean(per_class_iou(val_hist)) * 100
         val_loss = val_loss / len(val_loader)
         
         # Update history
@@ -154,12 +144,14 @@ def train_model(model: nn.Module,
                 'best_miou': best_miou,
             }, save_dir / 'best_model.pth')
         
-        # Print epoch summary
+        # Print epoch summary with per-class IoU
         print(f'\nEpoch {epoch+1}/{num_epochs}:')
         print(f'Train Loss: {train_loss:.4f}, mIoU: {train_miou:.2f}%')
-        print(f'Val Loss: {val_loss:.4f}, mIoU: {val_miou:.2f}%')
+        print_iou_per_class(train_hist, 'train')
+        print(f'\nVal Loss: {val_loss:.4f}, mIoU: {val_miou:.2f}%')
+        print_iou_per_class(val_hist, 'val')
         
-        # Plot current progress
+        # Plot training curves
         plot_training_curves(history, save_dir / 'training_curves.png')
     
     return history['train_miou'], history['val_miou'], best_epoch
