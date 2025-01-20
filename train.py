@@ -57,7 +57,7 @@ class Trainer:
             
             # Forward pass
             self.optimizer.zero_grad()
-            outputs = self.model(images)
+            outputs, _, _ = self.model(images)
             
             # Handle auxiliary outputs (BiSeNet)
             if isinstance(outputs, tuple):
