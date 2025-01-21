@@ -49,21 +49,11 @@ def train_model(model: nn.Module,
             labels = labels.to(device)
             
             optimizer.zero_grad()
-            outputs = model(images)
+            outputs, _, _ = model(images)
             
-            # Handle different model outputs
-            if isinstance(outputs, tuple):
-                main_output = outputs[0]
-                loss = criterion(main_output, labels)
-                # Add auxiliary losses if available
-                if len(outputs) > 1 and model.training:
-                    aux_outputs = outputs[1:]
-                    for aux_output in aux_outputs:
-                        if aux_output is not None:
-                            loss += 0.4 * criterion(aux_output, labels)
-            else:
-                main_output = outputs
-                loss = criterion(main_output, labels)
+
+            main_output = outputs
+            loss = criterion(main_output, labels)
             
             loss.backward()
             
