@@ -37,6 +37,17 @@ def train_model(model: nn.Module,
         for class_idx, iou in enumerate(iou_per_class):
             print(f"{class_names[class_idx]:20s}: {iou:.2f}%")
     
+    def process_labels(labels, dataset):
+        """Process labels based on their shape and convert to class indices"""
+        batch_class_labels = []
+        for label in labels:
+            # If label has 4 channels, use only the first 3
+            if len(label.shape) == 3 and label.shape[2] == 4:  # [H, W, 4]
+                label = label[:, :, :3]  # Use only RGB channels
+            class_label = dataset.map_color_to_class(label)
+            batch_class_labels.append(class_label)
+        return torch.stack(batch_class_labels)
+    
     for epoch in range(num_epochs):
         # Training phase
         model.train()
@@ -45,15 +56,17 @@ def train_model(model: nn.Module,
         
         train_loop = tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs} (Train)')
         for i, (images, labels) in enumerate(train_loop):
+            # Process labels
+            labels = process_labels(labels, train_loader.dataset)
+                
             images = images.to(device)
             labels = labels.to(device)
             
             optimizer.zero_grad()
             outputs, _, _ = model(images)
             
-
             main_output = outputs
-            loss = criterion(main_output, labels)
+            loss = criterion(main_output, labels.long())
             
             loss.backward()
             
@@ -95,14 +108,17 @@ def train_model(model: nn.Module,
         with torch.no_grad():
             val_loop = tqdm(val_loader, desc=f'Epoch {epoch+1}/{num_epochs} (Val)')
             for images, labels in val_loop:
+                # Process labels
+                labels = process_labels(labels, val_loader.dataset)
+                
                 images = images.to(device)
                 labels = labels.to(device)
                 
-                outputs= model(images)
+                outputs = model(images)
                 if isinstance(outputs, tuple):
                     outputs = outputs[0]
                 
-                loss = criterion(outputs, labels)
+                loss = criterion(outputs, labels.long())
                 val_loss += loss.item()
                 
                 predictions = outputs.argmax(1)
