@@ -13,17 +13,15 @@ class GTA5Dataset(Dataset):
         self.height = height
         self.width = width
         
-        # Define transforms
+        # Define transforms for images only
         self.transform_image = transforms.Compose([
             transforms.Resize((self.height, self.width), interpolation=Image.BILINEAR),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         
-        self.transform_label = transforms.Compose([
-            transforms.Resize((self.height, self.width), interpolation=Image.NEAREST),
-            Lambda(lambda pic: torch.from_numpy(np.array(pic, np.int64)))
-        ])
+        # For labels, we'll handle the conversion manually
+        self.transform_label = transforms.Resize((self.height, self.width), interpolation=Image.NEAREST)
         
         # Setup directories
         self.images_dir = os.path.join(self.root_dir, 'images')
@@ -72,6 +70,29 @@ class GTA5Dataset(Dataset):
         self.images.sort()
         self.labels.sort()
 
+    def map_color_to_class(self, label_image):
+        """Convert RGB label image to class indices"""
+        label_array = np.array(label_image)
+        h, w, _ = label_array.shape
+        class_label = np.zeros((h, w), dtype=np.int64)
+        
+        # Create RGB tuple to class index mapping
+        for color, class_idx in self.color_to_id.items():
+            # Create mask for current color
+            mask = np.all(label_array == color, axis=2)
+            class_label[mask] = class_idx
+        
+        return torch.from_numpy(class_label)
+
+    def get_class_names(self):
+        """Return list of class names"""
+        return [
+            'road', 'sidewalk', 'building', 'wall', 'fence',
+            'pole', 'traffic light', 'traffic sign', 'vegetation', 'terrain',
+            'sky', 'person', 'rider', 'car', 'truck',
+            'bus', 'train', 'motorcycle', 'bicycle'
+        ]
+
     def __len__(self):
         return len(self.images)
 
@@ -82,6 +103,9 @@ class GTA5Dataset(Dataset):
         
         # Apply transforms
         image = self.transform_image(image)
-        label = self.transform_label(label)
+        
+        # For label, first resize then convert to class indices
+        label = self.transform_label(label)  # This returns a PIL Image
+        label = self.map_color_to_class(label)  # Convert to class indices
         
         return image, label
