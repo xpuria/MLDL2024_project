@@ -98,9 +98,9 @@ def train_model(model: nn.Module,
                 images = images.to(device)
                 labels = labels.to(device)
                 
-                outputs, _, _ = model(images)
-                #if isinstance(outputs, tuple):
-                #    outputs = outputs[0]
+                outputs= model(images)
+                if isinstance(outputs, tuple):
+                    outputs = outputs[0]
                 
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
