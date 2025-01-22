@@ -5,13 +5,15 @@ from torch.utils.data import Dataset
 import numpy as np
 from torchvision import transforms
 from torchvision.transforms import Lambda
+import random
 
 class GTA5Dataset(Dataset):
-    def __init__(self, root_dir, height=1024, width=512):
+    def __init__(self, root_dir, height=1024, width=512, augment=None):
         super(GTA5Dataset, self).__init__()
         self.root_dir = root_dir
         self.height = height
-        self.width = width
+        self.width = width,
+        self.augment = augment
         
         # Define transforms for images only
         self.transform_image = transforms.Compose([
@@ -101,6 +103,9 @@ class GTA5Dataset(Dataset):
         image = Image.open(self.images[idx]).convert('RGB')
         label = Image.open(self.labels[idx]).convert('RGB')
         
+        if self.augment != None and random.random() < 0.5:
+            image = self.augment(image)
+
         # Apply transforms
         image = self.transform_image(image)
         
