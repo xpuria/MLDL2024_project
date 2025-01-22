@@ -12,7 +12,7 @@ class GTA5Dataset(Dataset):
         super(GTA5Dataset, self).__init__()
         self.root_dir = root_dir
         self.height = height
-        self.width = width,
+        self.width = width
         self.augment = augment
         
         # Define transforms for images only
