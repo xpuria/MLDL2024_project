@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Tuple, Dict, Any
 from MLDL2024_project.utils import fast_hist, per_class_iou, poly_lr_scheduler, plot_training_curves
 
-
 class CustomDiscriminator(nn.Module):
     """
     Discriminator network for adversarial training.
@@ -45,6 +44,8 @@ def train_adversarial(
     num_classes: int,
     device: torch.device,
     epochs: int,
+    source_flag: int = 0,  # Source domain label (default 0)
+    target_flag: int = 1,  # Target domain label (default 1)
     save_dir: str = 'checkpoints',
     lambda_adv: float = 0.002,
     scheduler_mode: bool = True
@@ -66,6 +67,8 @@ def train_adversarial(
         num_classes: Number of classes
         device: Device to run on
         epochs: Number of epochs
+        source_flag: Label for source domain (default 0)
+        target_flag: Label for target domain (default 1)
         save_dir: Directory to save checkpoints
         lambda_adv: Weight for adversarial loss
         scheduler_mode: Whether to use learning rate scheduler
@@ -122,15 +125,16 @@ def train_adversarial(
             pred_source = source_interp(pred_source)
             loss_seg = gen_criterion(pred_source, source_labels)
             
-            # Target domain
+            # Target domain (try to fool discriminator)
             pred_target = generator(target_imgs)
             if isinstance(pred_target, tuple):
                 pred_target = pred_target[0]
             pred_target = target_interp(pred_target)
             
             disc_pred = discriminator(F.softmax(pred_target, dim=1))
+            # Generator tries to make target predictions look like source
             loss_adv = disc_criterion(disc_pred, 
-                                    torch.ones_like(disc_pred).to(device))
+                                    torch.full_like(disc_pred, source_flag).to(device))
             
             gen_loss = loss_seg + lambda_adv * loss_adv
             gen_loss.backward()
@@ -152,15 +156,15 @@ def train_adversarial(
                 
             disc_optimizer.zero_grad()
             
-            # Real (source) samples
+            # Source domain (should be classified as source)
             disc_pred_source = discriminator(F.softmax(pred_source.detach(), dim=1))
             loss_disc_source = disc_criterion(disc_pred_source,
-                                           torch.ones_like(disc_pred_source))
+                                           torch.full_like(disc_pred_source, source_flag))
             
-            # Fake (target) samples
+            # Target domain (should be classified as target)
             disc_pred_target = discriminator(F.softmax(pred_target.detach(), dim=1))
             loss_disc_target = disc_criterion(disc_pred_target,
-                                           torch.zeros_like(disc_pred_target))
+                                           torch.full_like(disc_pred_target, target_flag))
             
             disc_loss = (loss_disc_source + loss_disc_target) * 0.5
             disc_loss.backward()
@@ -246,6 +250,10 @@ def train_adversarial(
 
 # Usage example:
 """
+# Set source and target flags
+source_flag = 0  # Label for source domain
+target_flag = 1  # Label for target domain
+
 # Initialize models and optimizers
 generator = YourGenerator(num_classes=19).to(device)
 discriminator = CustomDiscriminator(num_classes=19).to(device)
@@ -272,6 +280,8 @@ train_mious, val_mious, best_epoch = train_adversarial(
     target_interp=target_interp,
     num_classes=19,
     device=device,
-    epochs=50
+    epochs=50,
+    source_flag=source_flag,
+    target_flag=target_flag
 )
 """
