@@ -21,11 +21,15 @@ class CustomDiscriminator(nn.Module):
         self.conv4 = nn.Conv2d(ndf*4, ndf*8, kernel_size=3, stride=2, padding=1)
         self.classifier = nn.Conv2d(ndf*8, 1, kernel_size=3, stride=2, padding=1)
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.dropout = nn.Dropout(0.5)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.leaky_relu(self.conv1(x))
+        x = self.dropout(x)
         x = self.leaky_relu(self.conv2(x))
+        x = self.dropout(x)
         x = self.leaky_relu(self.conv3(x))
+        x = self.dropout(x)
         x = self.leaky_relu(self.conv4(x))
         x = self.classifier(x)
         return x
@@ -240,11 +244,7 @@ def train_adversarial(
         print(f'\nVal Loss: {val_loss:.4f}, mIoU: {val_miou:.2f}%')
         print_iou_per_class(val_hist, 'val')
         
-        # Plot training curves
-        plot_training_curves({
-            'train_miou': train_mious,
-            'val_miou': val_mious
-        }, save_dir / 'training_curves.png')
+
     
     return train_mious, val_mious, best_epoch
 
