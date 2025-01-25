@@ -104,7 +104,11 @@ class GTA5Dataset(Dataset):
         label = Image.open(self.labels[idx]).convert('RGB')
         
         if self.augment != None and random.random() < 0.5:
-            image = self.augment(image)
+            if isinstance(self.augment, list):
+                for aug in self.augment:
+                    image = aug(image)
+            else:
+                image = self.augment(image)
 
         # Apply transforms
         image = self.transform_image(image)
