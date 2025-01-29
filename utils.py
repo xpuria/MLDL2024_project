@@ -157,8 +157,16 @@ def analyze_model_complexity(model: torch.nn.Module, height: int = 512, width: i
     Returns:
         Dictionary containing all model statistics
     """
+    # Store original device
+    device = next(model.parameters()).device
+    
+    # Move model to CPU for FLOPs analysis
+    model = model.cpu()
     params_info = count_parameters(model)
     flops = FlopCountAnalysis(model, torch.zeros((1, 3, height, width)))
+    
+    # Move model back to original device
+    model = model.to(device)
     
     return {
         **params_info,
